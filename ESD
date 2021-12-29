@@ -1,0 +1,219 @@
+//PWM
+#include "LPC1768_Includes.h"
+void delay(unsigned int time)
+{
+unsigned int i,j;
+for(i=0;i<time;i++)
+for(j=0;j<20000;j++);
+}
+int main()
+{
+unsigned int period = 10000,i;
+PINSEL3 = 0x00020000; //Configure pin P1.24 as PWM1.5
+PCONP = 1<<6; //Enable the PWM peripheral
+PWM1CTCR = 0x00000000; //Select Timer mode
+PWM1PR = 0x00; //set the prescaler
+PWM1MCR = 0x00000002; //Reset timer on match with 0 register
+PWM1MR0 = 10000; //set the period
+PWM1PCR = 0x00002000; //Enable PWM1.5 in single edge mode
+PWM1TCR = 0x00000009; //Enable PWM and TC
+while(1)
+{
+for(i=10;i>0;i--)
+{
+PWM1MR5 = i*period/10; //Change Duty Cycle
+PWM1LER = 0x00000020; //PWM1.5 latch enable
+delay(1000); //Delay
+}
+}
+return 0;
+}
+
+=======================================================================================
+//Timer
+
+#include "LPC1768_Includes.h"
+#define PRESCALE 12000 //12000 PCLK clock cycles to increment TC by 1
+void initTimer0(void);
+void DelayMs(unsigned int Ms)
+{
+T0TCR = 0x02; //Reset TImer
+T0TCR = 0x01; //Enable Timer
+while(T0TC<Ms); // wait until timer counter reaches the desired delay
+T0TCR =0x00; //Disable timer
+}
+void main()
+{
+PINSEL4=0x00;
+ //initClocks(); //Initalize CPU & Peripheral Clocks @12MHz
+ //VPBDIV = 0x01; //Initalize CPU & Peripheral Clocks @12MHz
+initTimer0(); //Initalize Timer0
+FIO2DIR=0x000000FF;
+while(1)
+{
+FIO2SET=0x000000FF;
+DelayMs(500); //0.5 secs delay
+FIO2CLR=0x000000FF;
+DelayMs(500);
+}
+}
+void initTimer0(void)
+{
+T0CTCR = 0x0; // Timer mode
+T0PR =PRESCALE-1; //value in Decimal - Increment T0TC at every 12000 clock
+cycles
+ //Count begins from 0 hence subtracting 1. 12000 clock cycles @12MHz = 1 ms
+T0TCR = 0x02; //Reset Timer
+
+=============================================================================================================
+//ADC
+
+// ADC Programming in LPC1768
+#include "LPC1768_includes.h"
+void HextoASCII(unsigned int myValue);
+//#include "UART.h"
+//#include <stdio.h>
+int main ()
+{
+unsigned int rx;
+PINSEL3=0xc0000000; // AD0.5
+PINSEL0=0x00000050; //UART initialisation
+AD0CR=0x01200220; // channnel 5 ,6.0 MHz, raise SoC
+while((AD0GDR&0x80000000)!=0x80000000); // EoC DONE
+rx= (AD0GDR&0x0000fff0);
+rx=rx>>4;
+HextoASCII (rx);
+}
+void HextoASCII(unsigned int myValue)
+{
+unsigned int d1,d2,d3,d4,i;
+//Taking digits one by one
+d1=myValue % 0x0A; //Least Significant Digit (LSD).... myValue divided by 10, Remainder = d1
+d1 = d1 | 0x30; //make it ASCII
+d2=(myValue / 0x0A) % 0x0A;
+d2 = d2 | 0x30; //make it ASCII
+d3=((myValue/ 0x0A) / 0x0A) % 0x0A;
+d3 = d3 | 0x30; //make it ASCII
+d4=(((myValue/ 0x0A) / 0x0A) / 0x0A ) % 0x0A ; //Most Sigificant Digit (MSD)
+d4 = d4 | 0x30; //make it ASCII
+U0FCR = 0X07; // RESET FIFO AND ENABLE IT
+U0LCR = 0x80;
+U0DLL = 0x75;
+U0DLM = 0x00;
+U0LCR = 0x03;
+U0TER = 0x80;
+while(1)
+{
+U0THR = d4;
+while(!(U0LSR & 0x20));
+for(i=0;i<255;i++);
+U0THR = d3;
+while(!(U0LSR & 0x20));
+for(i=0;i<255;i++);
+U0THR = d2;
+while(!(U0LSR & 0x20));
+for(i=0;i<255;i++);
+U0THR = d1;
+while(!(U0LSR & 0x20));
+for(i=0;i<255;i++);
+U0THR = '/';
+while(!(U0LSR & 0x20)); // for transferring a character
+for(i=0;i<255;i++);
+}
+}
+===================================================================================================================================
+//GLCD
+
+#include "LPC1768_Includes.h"
+#include "image.h"
+#define ldata 0x00000FF0
+#define en 1<<26
+#define rs 1<<25
+#define CS1 1<<27
+#define CS2 1<<28
+#define rw 1<<29
+void Glcdcmd(unsigned char value); //Function declaration
+void Glcddata(unsigned int data); //Function declaration
+void MSDelay(unsigned int time); //Function declaration
+void Glcddisp(unsigned int*temp1); //Function declaration
+int main()
+{
+PINSEL0 = 0x00000000;
+PINSEL3 = 0x00000000;
+FIO0DIR = 0x00000FF0;
+FIO1DIR = 0x3E000000;
+FIO1SET = CS1;
+FIO2SET = CS2;
+Glcdcmd(0x3F); //Display ON
+MSDelay(10);
+Glcdcmd(0x40); // Set Y address as 0 (range 0-63)
+MSDelay(10);
+Glcdcmd(0xB8); //Set X address as 0 (page address) range 0-7)
+MSDelay(2000);
+Glcdcmd(0xC0); // Set Z address (start line=0)
+MSDelay(2000);
+Glcddisp(temp);
+MSDelay(2000);
+}
+void Glcddisp(unsigned int*temp1) //display routine
+{
+int i,j;
+for(i=0;i<8;i++)
+{
+FIO1SET=CS1; //select controller 1
+FIO1CLR=CS2;
+Glcdcmd(0xB8 | i); // Increment page address
+Glcdcmd(0x40);
+for(j=0;j<64;j++) //display controller 1 data
+Glcddata(temp1[(i*128)+j]);
+FIO1CLR=CS1; //select controller 2
+FIO1SET=CS2;
+Glcdcmd(0xB8 | i); // Increment page address
+Glcdcmd(0x40);
+for(j=64;j<128;j++) //display controller 2 data
+Glcddata(temp1[(i*128)+j]);
+}
+}
+void Glcdcmd(unsigned char value){
+FIO0CLR = ldata;
+FIO0SET = value<<4; //LCD_SHIFT
+FIO1CLR=rs; // rs=0 command register
+FIO1CLR=rw; // R/W=0
+FIO1SET=en;
+MSDelay(10);
+FIO1CLR=en;
+}
+void Glcddata(unsigned int data)
+{
+FIO0CLR=ldata;
+FIO0SET=data<<4; //LCD_SHIFT
+FIO1SET=rs;
+FIO1CLR=rw; // data write operation
+FIO1SET=en;
+MSDelay(10);
+FIO1CLR=en;
+}
+void MSDelay(unsigned int time)
+{
+unsigned int i,j;
+for(i=0;i<time;i++)
+for(j=0;j<5000;j++);
+}
+===============================================================================================================================
+
+//LED interfacing
+
+#include"LPC1768_includes.H"
+int main(void)
+{
+int i=0;
+PINSEL4=0X00000000; //All P2 pins are GPIO
+FIO2DIR=0X000000FF; //Make P2.0 to P2.7 as output
+while (1)
+ {
+FIO2SET=0X000000FF; //Sending Logic 1 through P2.0 to P2.7
+for (i=0; i<1000000; i++) ; //Delay
+FIO2CLR=0x000000FF; //Sending Logic 0 through P2.0 to P2.7
+for (i=0; i<1000000; i++) ; //Delay
+}
+}
